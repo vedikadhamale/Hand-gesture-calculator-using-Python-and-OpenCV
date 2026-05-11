@@ -41,10 +41,10 @@ python main.py
 
 ## Project Output
 ### Addition Operation
-![Output](image/1.png)
-![Output](image/2.png)
-![Output](image/3.png)
-![Output](image/4.png)
+![Output](Image/1.png)
+![Output](Image/2.png)
+![Output](Image/3.png)
+![Output](Image/4.png)
 
 ## Author
 
