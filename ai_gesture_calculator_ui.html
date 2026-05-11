@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Gesture Calculator - UI Design</title>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Glows */
+        .glow-text {
+            text-shadow: 0 0 15px rgba(34, 211, 238, 0.6);
+        }
+
+        .glow-text-sm {
+            text-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
+        }
+
+        .glow-border {
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+        }
+
+        .glow-border-active {
+            box-shadow: 0 0 25px rgba(34, 211, 238, 0.4);
+            border-color: rgba(34, 211, 238, 0.7);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(34, 211, 238, 0.2);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(34, 211, 238, 0.5);
+        }
+
+        /* Animations */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #22d3ee, transparent);
+            animation: scan 3s linear infinite;
+            opacity: 0.6;
+            box-shadow: 0 0 10px #22d3ee;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0;
+            }
+
+            50% {
+                top: 100%;
+            }
+
+            100% {
+                top: 0;
+            }
+        }
+
+        .float-animation {
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(-50%, -50%);
+            }
+
+            50% {
+                transform: translate(-50%, -65%);
+            }
+
+            100% {
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        .pulse-soft {
+            animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-soft {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                        },
+                        cyan: {
+                            400: '#22d3ee',
+                            500: '#06b6d4',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="h-screen w-full overflow-hidden relative">
+
+    <!-- Ambient glowing orbs for background depth -->
+    <div
+        class="absolute top-[-15%] left-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-600/10 blur-[120px] pointer-events-none">
+    </div>
+    <div
+        class="absolute bottom-[-15%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-700/10 blur-[120px] pointer-events-none">
+    </div>
+
+    <div id="root" class="h-full w-full relative z-10"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [isVoiceOn, setIsVoiceOn] = useState(true);
+            const [expression, setExpression] = useState("");
+            const [result, setResult] = useState("");
+            const [isCameraActive, setIsCameraActive] = useState(false);
+            const [handDetected, setHandDetected] = useState(false);
+            const [activeGesture, setActiveGesture] = useState("✋");
+            const [history, setHistory] = useState([]);
+
+            const gestures = [
+                { icon: "✊", value: "0" },
+                { icon: "☝️", value: "1" },
+                { icon: "✌️", value: "2" },
+                { icon: "🤟", value: "3" },
+                { icon: "🖖", value: "4" },
+                { icon: "✋", value: "5" }
+            ];
+
+            // Live state polling from Python Backend
+            useEffect(() => {
+                const fetchState = async () => {
+                    try {
+                        const res = await fetch('/state');
+                        const data = await res.json();
+                        setExpression(data.expression || "");
+                        setResult(data.result || "");
+                        setIsCameraActive(data.is_camera_active);
+                        setHandDetected(data.hand_detected);
+                        if (data.history) setHistory(data.history);
+                        if (data.active_gesture) setActiveGesture(data.active_gesture);
+                    } catch (err) {
+                        console.error("Connection to backend lost", err);
+                    }
+                };
+
+                const interval = setInterval(fetchState, 150);
+                return () => clearInterval(interval);
+            }, []);
+
+            return (
+                <div className="h-full p-4 md:p-6 flex flex-col md:flex-row gap-6">
+
+                    {/* ================= LEFT PANEL ================= */}
+                    <div className="w-full md:w-[35%] lg:w-[30%] flex flex-col gap-5 h-full">
+
+                        {/* App Title */}
+                        <div className="flex items-center gap-3 glass-panel px-5 py-4 rounded-2xl">
+                            
+                            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-blue-400 tracking-wide">
+                                Hand Gesture Calculator
+                            </h1>
+                        </div>
+
+
+
+                        {/* Expression & Result Display */}
+                        <div className="glass-panel rounded-2xl p-6 flex flex-col gap-5 relative overflow-hidden group">
+                            {/* Accent top border */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-blue-600 opacity-80"></div>
+
+                            <div className="relative z-10">
+                                <p className="text-xs text-cyan-400/80 uppercase tracking-widest font-semibold mb-2">Live Expression</p>
+                                <div className="font-mono text-2xl text-slate-100 bg-slate-900/60 p-4 rounded-xl border border-slate-700/50 shadow-inner flex justify-between items-center group-hover:border-cyan-500/30 transition-colors">
+                                    <span>{expression}</span>
+                                    <span className="w-2 h-6 bg-cyan-400 animate-pulse"></span>
+                                </div>
+                            </div>
+
+                            <div className="relative z-10 mt-2">
+                                <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-2">Result</p>
+                                <div className="text-6xl font-bold text-cyan-400 glow-text transition-all duration-300 flex items-end gap-2">
+                                    <span className="text-3xl text-cyan-400/50 mb-2">=</span> {result}
+                                </div>
+                            </div>
+
+                            {/* Decorative background element */}
+                            <div className="absolute -bottom-10 -right-10 text-9xl text-slate-800/30 rotate-12 pointer-events-none font-mono font-bold">
+                                =
+                            </div>
+                        </div>
+
+                        {/* Gesture Instructions Grid */}
+                        <div className="glass-panel rounded-2xl p-5 flex-1 flex flex-col min-h-0">
+                            <div className="flex justify-between items-end mb-4">
+                                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Gesture Dictionary</h2>
+                                <span className="text-[10px] text-cyan-400 bg-cyan-400/10 px-2 py-1 rounded-md border border-cyan-400/20">Auto-detect</span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3 overflow-y-auto pr-2 pb-1">
+                                {gestures.map((g, i) => (
+                                    <div key={i} className={`flex flex-col items-center justify-center p-3 rounded-xl border backdrop-blur-sm transition-all duration-300 cursor-default
+                                        ${activeGesture === g.icon
+                                            ? 'bg-cyan-500/20 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)] scale-105'
+                                            : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-700/60 hover:border-slate-600'}`}>
+                                        <span className="text-2xl mb-1 drop-shadow-md">{g.icon}</span>
+                                        <span className={`text-xs font-bold ${activeGesture === g.icon ? 'text-cyan-300 glow-text-sm' : 'text-slate-400'}`}>
+                                            {g.value}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+
+                    </div>
+
+                    {/* ================= RIGHT PANEL (Camera View) ================= */}
+                    <div className="w-full md:w-[65%] lg:w-[70%] flex flex-col h-[60vh] md:h-full relative">
+
+
+
+                        {/* Main Camera Container */}
+                        <div className={`flex-1 relative rounded-3xl overflow-hidden glass-panel border-2 transition-all duration-500 
+                            ${handDetected ? 'border-cyan-500/40 shadow-[0_0_40px_rgba(34,211,238,0.15)]' : 'border-slate-700/50'}`}>
+
+                            {/* Scanning Laser Line */}
+                            {isCameraActive && <div className="scan-line"></div>}
+
+                            {/* Camera Viewport Background */}
+                            <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
+
+                                {/* Live Video Stream from Python Backend */}
+                                {isCameraActive && <img src="/video_feed" className="absolute inset-0 w-full h-full object-cover z-0" alt="Camera Feed" />}
+
+                                {/* Technical Grid Overlay (subtle) */}
+                                <div className="absolute inset-0 opacity-20 z-10 pointer-events-none" style={{
+                                    backgroundImage: `
+                                        linear-gradient(rgba(34, 211, 238, 0.15) 1px, transparent 1px), 
+                                        linear-gradient(90deg, rgba(34, 211, 238, 0.15) 1px, transparent 1px)`,
+                                    backgroundSize: '50px 50px'
+                                }}></div>
+
+                                {/* Center Crosshair / Focus Ring */}
+                                {!handDetected && (
+                                    <div className="z-10 flex flex-col items-center">
+                                  
+                                    </div>
+                                )}
+
+                                {/* HUD Focus Brackets (corners) */}
+                                <div className="absolute w-[80%] h-[80%] max-w-3xl max-h-2xl pointer-events-none opacity-60 transition-all duration-500 ease-in-out"
+                                    style={{ transform: handDetected ? 'scale(0.95)' : 'scale(1)' }}>
+                                    <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-cyan-500 rounded-tl-xl"></div>
+                                    <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-cyan-500 rounded-tr-xl"></div>
+                                    <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-cyan-500 rounded-bl-xl"></div>
+                                    <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-cyan-500 rounded-br-xl"></div>
+                                </div>
+
+                                {/* UI Element: Detected Hand Feedback (Moved to corner so it doesn't block the face/hand) */}
+                                {handDetected && (
+                                    <div className="absolute bottom-6 right-6 z-20 pointer-events-none flex items-center gap-4 bg-slate-900/80 p-3 rounded-2xl border border-cyan-500/50 backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.3)]">
+                                        <div className="text-4xl drop-shadow-[0_0_15px_rgba(34,211,238,0.6)]">
+                                            {activeGesture}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold">Detected</span>
+                                            <span className="text-xl font-black text-white">
+                                                {gestures.find(g => g.icon === activeGesture)?.value || '?'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
